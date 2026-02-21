@@ -1,6 +1,6 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,44 +9,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { deleteItem, getItems, ShoppingItem } from "../lib/appwrite";
+import Toast from "../components/Toast";
+import { useLists } from "../hooks/useLists";
 
 export default function HomeScreen() {
   const router = useRouter();
 
-  // All shopping items fetched from Appwrite
-  const [items, setItems] = useState<ShoppingItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Consume items, fetchItems and deleteItem from ListContext via the useLists hook
+  const { items, loading, fetchItems } = useLists();
 
-  // Fetch items from Appwrite database whenever this screen comes into focus
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getItems();
-      setItems(data);
-    } catch (error) {
-      console.error("Failed to fetch items:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Re-fetch every time the screen is focused (e.g. returning from add-list)
+  // Re-fetch every time this screen comes into focus (e.g. after adding or deleting)
   useFocusEffect(
     useCallback(() => {
       fetchItems();
     }, [fetchItems]),
   );
-
-  // Delete an item from Appwrite and refresh the list
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteItem(id);
-      setItems((prev) => prev.filter((item) => item.$id !== id));
-    } catch (error) {
-      console.error("Failed to delete item:", error);
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -58,21 +35,25 @@ export default function HomeScreen() {
           lists below.
         </Text>
 
-        {/* Button that navigates to the Add Shopping List screen */}
+        {/* Navigates to the dedicated Add screen (app/add.tsx) */}
         <FontAwesome.Button
           name="plus"
           backgroundColor="#983b5c"
-          onPress={() => router.push("/add-list")}
+          onPress={() => router.push("/add")}
           style={styles.addButton}
         >
           Add Item
         </FontAwesome.Button>
       </View>
 
-      {/* ── Bottom section: all items from Appwrite ── */}
+      {/* ── Bottom section: list of all items from Appwrite ── */}
       <View style={styles.listContainer}>
         {loading ? (
-          <ActivityIndicator size="large" color="#983b5c" />
+          <ActivityIndicator
+            size="large"
+            color="#983b5c"
+            style={{ marginTop: 30 }}
+          />
         ) : items.length === 0 ? (
           <Text style={styles.emptyText}>
             {'No items yet. Tap "Add Item" to get started!'}
@@ -83,8 +64,17 @@ export default function HomeScreen() {
             keyExtractor={(item) => item.$id}
             renderItem={({ item }) => (
               <View style={styles.listItem}>
-                <Text style={styles.listItemText}>{item.name}</Text>
-                <TouchableOpacity onPress={() => handleDelete(item.$id)}>
+                <Text style={styles.listItemText}>{item.title}</Text>
+
+                {/* Navigates to the dedicated Delete screen (app/delete.tsx) */}
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: "/delete",
+                      params: { id: item.$id, title: item.title },
+                    })
+                  }
+                >
                   <Text style={styles.removeText}>Delete</Text>
                 </TouchableOpacity>
               </View>
@@ -92,6 +82,9 @@ export default function HomeScreen() {
           />
         )}
       </View>
+
+      {/* Floating toast for success / error feedback */}
+      <Toast />
     </View>
   );
 }
