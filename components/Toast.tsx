@@ -2,29 +2,20 @@ import { useEffect, useRef } from "react";
 import { Animated, Platform, StyleSheet, Text } from "react-native";
 import { useLists } from "../hooks/useLists";
 
-/**
- * Floating toast banner that reads from ListContext.
- * Place it inside any screen that needs to show success / error feedback.
- * Auto-dismisses after 3 seconds.
- */
 export default function Toast() {
   const { toast, clearToast } = useLists();
-  // useRef instead of useAnimatedValue – compatible with react-native-web
   const opacity = useRef(new Animated.Value(0)).current;
-  // useNativeDriver is not supported on web
   const nativeDriver = Platform.OS !== "web";
 
   useEffect(() => {
     if (!toast) return;
 
-    // Fade in
     Animated.timing(opacity, {
       toValue: 1,
       duration: 250,
       useNativeDriver: nativeDriver,
     }).start();
 
-    // Auto-dismiss after 3 s
     const timer = setTimeout(() => {
       Animated.timing(opacity, {
         toValue: 0,

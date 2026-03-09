@@ -1,6 +1,6 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,15 +10,91 @@ import {
   View,
 } from "react-native";
 import Toast from "../components/Toast";
+import { ShoppingItem } from "../contexts/ListContext";
 import { useLists } from "../hooks/useLists";
+
+function ListCard({
+  item,
+  onDelete,
+  onToggle,
+}: {
+  item: ShoppingItem;
+  onDelete: () => void;
+  onToggle: (itemIndex: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.cardHeader}
+        onPress={() => setExpanded((prev) => !prev)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardHeaderLeft}>
+          <FontAwesome
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={12}
+            color="#983b5c"
+            style={{ marginRight: 10 }}
+          />
+          <Text style={styles.cardTitle}>{item.title}</Text>
+        </View>
+        <View style={styles.cardHeaderRight}>
+          <Text style={styles.itemCount}>
+            {item.items.length} item{item.items.length !== 1 ? "s" : ""}
+          </Text>
+          <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
+            <FontAwesome name="trash" size={16} color="#e74c3c" />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.subItemsWrapper}>
+          {item.items.length === 0 ? (
+            <Text style={styles.noSubItems}>No items in this list.</Text>
+          ) : (
+            item.items.map((si, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.subItemRow}
+                onPress={() => onToggle(index)}
+                activeOpacity={0.6}
+              >
+                <FontAwesome
+                  name={si.checked ? "check-square-o" : "square-o"}
+                  size={18}
+                  color={si.checked ? "#27ae60" : "#aaa"}
+                  style={{ marginRight: 10 }}
+                />
+                <View style={styles.subItemInfo}>
+                  <Text
+                    style={[
+                      styles.subItemName,
+                      si.checked && styles.subItemChecked,
+                    ]}
+                  >
+                    {si.name}
+                  </Text>
+                  <Text style={styles.subItemMeta}>
+                    Qty: {si.quantity}
+                    {si.notes ? `  ·  ${si.notes}` : ""}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { items, loading, fetchItems, toggleSubItem } = useLists();
 
-  // Consume items, fetchItems and deleteItem from ListContext via the useLists hook
-  const { items, loading, fetchItems } = useLists();
-
-  // Re-fetch every time this screen comes into focus (e.g. after adding or deleting)
   useFocusEffect(
     useCallback(() => {
       fetchItems();
@@ -27,26 +103,22 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ── Top section: title, description & Add button ── */}
       <View style={styles.header}>
         <Text style={styles.title}>Shopping List App</Text>
         <Text style={styles.description}>
           Welcome to the Shopping List App! Create and manage your shopping
           lists below.
         </Text>
-
-        {/* Navigates to the dedicated Add screen (app/add.tsx) */}
         <FontAwesome.Button
           name="plus"
           backgroundColor="#983b5c"
           onPress={() => router.push("/add")}
           style={styles.addButton}
         >
-          Add Item
+          Add List
         </FontAwesome.Button>
       </View>
 
-      {/* ── Bottom section: list of all items from Appwrite ── */}
       <View style={styles.listContainer}>
         {loading ? (
           <ActivityIndicator
@@ -56,34 +128,28 @@ export default function HomeScreen() {
           />
         ) : items.length === 0 ? (
           <Text style={styles.emptyText}>
-            {'No items yet. Tap "Add Item" to get started!'}
+            {'No lists yet. Tap "Add List" to get started!'}
           </Text>
         ) : (
           <FlatList
             data={items}
-            keyExtractor={(item) => item.$id}
+            keyExtractor={(item) => item._id}
             renderItem={({ item }) => (
-              <View style={styles.listItem}>
-                <Text style={styles.listItemText}>{item.title}</Text>
-
-                {/* Navigates to the dedicated Delete screen (app/delete.tsx) */}
-                <TouchableOpacity
-                  onPress={() =>
-                    router.push({
-                      pathname: "/delete",
-                      params: { id: item.$id, title: item.title },
-                    })
-                  }
-                >
-                  <Text style={styles.removeText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
+              <ListCard
+                item={item}
+                onDelete={() =>
+                  router.push({
+                    pathname: "/delete",
+                    params: { id: item._id, title: item.title },
+                  })
+                }
+                onToggle={(itemIndex) => toggleSubItem(item._id, itemIndex)}
+              />
             )}
           />
         )}
       </View>
 
-      {/* Floating toast for success / error feedback */}
       <Toast />
     </View>
   );
@@ -95,7 +161,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     paddingTop: 60,
   },
-  // Top header block (title + description + button)
   header: {
     alignItems: "center",
     paddingHorizontal: 20,
@@ -117,10 +182,9 @@ const styles = StyleSheet.create({
   addButton: {
     borderRadius: 8,
   },
-  // List section below the header
   listContainer: {
     flex: 1,
-    padding: 20,
+    padding: 16,
   },
   emptyText: {
     textAlign: "center",
@@ -128,19 +192,83 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 30,
   },
-  listItem: {
+  card: {
+    borderWidth: 1,
+    borderColor: "#e8e8e8",
+    borderRadius: 10,
+    marginBottom: 12,
+    overflow: "hidden",
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 14,
     paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    backgroundColor: "#fafafa",
   },
-  listItemText: {
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  cardTitle: {
     fontSize: 16,
+    fontWeight: "600",
+    color: "#222",
+    flexShrink: 1,
   },
-  removeText: {
-    color: "#e74c3c",
+  cardHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  itemCount: {
+    fontSize: 12,
+    color: "#999",
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  subItemsWrapper: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  noSubItems: {
     fontSize: 14,
+    color: "#aaa",
+    paddingVertical: 4,
+  },
+  subItemRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f5",
+  },
+  subItemInfo: {
+    flex: 1,
+  },
+  subItemName: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#222",
+  },
+  subItemChecked: {
+    textDecorationLine: "line-through",
+    color: "#aaa",
+  },
+  subItemMeta: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 2,
   },
 });

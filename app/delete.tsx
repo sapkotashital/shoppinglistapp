@@ -1,33 +1,27 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Toast from "../components/Toast";
 import { useLists } from "../hooks/useLists";
 
 export default function DeleteScreen() {
   const router = useRouter();
-
-  // Receive the item id and title passed via router.push params from index.tsx
   const { id, title } = useLocalSearchParams<{ id: string; title: string }>();
-
-  // Access deleteItem from ListContext via the useLists hook
   const { deleteItem } = useLists();
-
   const [deleting, setDeleting] = useState(false);
 
-  // Confirm deletion – calls deleteItem from ListContext then navigates back
   const handleConfirm = async () => {
     if (!id) return;
     setDeleting(true);
     try {
       await deleteItem(id);
-      router.back(); // Return to the home screen after deleting
+      router.back();
     } finally {
       setDeleting(false);
     }
@@ -35,16 +29,13 @@ export default function DeleteScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Delete Item</Text>
-
-      {/* Show the item name that is about to be deleted */}
+      <Text style={styles.heading}>Delete List</Text>
       <Text style={styles.message}>
         Are you sure you want to delete{" "}
         <Text style={styles.itemName}>{title}</Text>?
       </Text>
       <Text style={styles.subMessage}>This action cannot be undone.</Text>
 
-      {/* Confirm deletion – calls deleteItem from ListContext */}
       <TouchableOpacity
         style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
         onPress={handleConfirm}
@@ -57,7 +48,6 @@ export default function DeleteScreen() {
         )}
       </TouchableOpacity>
 
-      {/* Go back without deleting */}
       <TouchableOpacity
         style={styles.cancelButton}
         onPress={() => router.back()}
@@ -66,7 +56,6 @@ export default function DeleteScreen() {
         <Text style={styles.cancelButtonText}>Cancel</Text>
       </TouchableOpacity>
 
-      {/* Floating toast for success / error feedback */}
       <Toast />
     </View>
   );

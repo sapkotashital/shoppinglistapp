@@ -1,33 +1,38 @@
-import { databases } from "@/lib/appwrite";
+import { apiFetch } from "@/lib/api";
 import {
-    createContext,
-    ReactNode,
-    useCallback,
-    useEffect,
-    useState,
+  createContext,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useState,
 } from "react";
-import { ID, Models } from "react-native-appwrite";
 
-const DATABASE_ID = process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID!;
-const COLLECTION_ID = process.env.EXPO_PUBLIC_APPWRITE_COLLECTION_ID!;
-
-// Shape of a shopping item document from Appwrite
-export interface ShoppingItem extends Models.Document {
-  title: string;
+export interface SubItem {
+  name: string;
+  quantity: number;
+  checked: boolean;
+  notes: string;
 }
 
-// Data required when creating a new item
+export interface ShoppingItem {
+  _id: string;
+  title: string;
+  items: SubItem[];
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NewItemData {
   title: string;
+  items: SubItem[];
 }
 
-// Toast notification shown after an action
 export interface ToastMessage {
   text: string;
   type: "success" | "error";
 }
 
-// Shape of the context value
 interface ListContextType {
   items: ShoppingItem[];
   loading: boolean;
@@ -36,6 +41,7 @@ interface ListContextType {
   fetchItems: () => Promise<void>;
   addItem: (data: NewItemData) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
+  toggleSubItem: (listId: string, itemIndex: number) => Promise<void>;
 }
 
 export const ListContext = createContext<ListContextType | undefined>(
@@ -52,11 +58,8 @@ export const ListProvider = ({ children }: { children: ReactNode }) => {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await databases.listDocuments<ShoppingItem>(
-        DATABASE_ID,
-        COLLECTION_ID,
-      );
-      setItems(response.documents);
+      const data = await apiFetch<ShoppingItem[]>("/api/items");
+      setItems(data);
     } catch (error: any) {
       setToast({
         text: error?.message ?? "Failed to load items.",
@@ -69,12 +72,14 @@ export const ListProvider = ({ children }: { children: ReactNode }) => {
 
   async function addItem(data: NewItemData) {
     try {
-      await databases.createDocument<ShoppingItem>(
-        DATABASE_ID,
-        COLLECTION_ID,
-        ID.unique(),
-        { ...data },
-      );
+      await apiFetch<ShoppingItem>("/api/items", {
+        method: "POST",
+        body: JSON.stringify({
+          title: data.title,
+          items: data.items,
+          isArchived: false,
+        }),
+      });
       await fetchItems();
       setToast({ text: "Item added successfully!", type: "success" });
     } catch (error: any) {
@@ -87,12 +92,45 @@ export const ListProvider = ({ children }: { children: ReactNode }) => {
 
   async function deleteItem(id: string) {
     try {
-      await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
+      await apiFetch(`/api/items/${id}`, { method: "DELETE" });
       await fetchItems();
       setToast({ text: "Item deleted successfully!", type: "success" });
     } catch (error: any) {
       setToast({
         text: error?.message ?? "Failed to delete item.",
+        type: "error",
+      });
+    }
+  }
+
+  async function toggleSubItem(listId: string, itemIndex: number) {
+    // Optimistically flip the checked flag in local state
+    setItems((prev) =>
+      prev.map((list) => {
+        if (list._id !== listId) return list;
+        const updatedSubItems = list.items.map((si, i) =>
+          i === itemIndex ? { ...si, checked: !si.checked } : si,
+        );
+        return { ...list, items: updatedSubItems };
+      }),
+    );
+
+    // Persist the full updated items array to the backend
+    try {
+      const list = items.find((l) => l._id === listId);
+      if (!list) return;
+      const updatedSubItems = list.items.map((si, i) =>
+        i === itemIndex ? { ...si, checked: !si.checked } : si,
+      );
+      await apiFetch(`/api/items/${listId}`, {
+        method: "PUT",
+        body: JSON.stringify({ items: updatedSubItems }),
+      });
+    } catch (error: any) {
+      // Revert on failure
+      await fetchItems();
+      setToast({
+        text: error?.message ?? "Failed to update item.",
         type: "error",
       });
     }
@@ -113,6 +151,7 @@ export const ListProvider = ({ children }: { children: ReactNode }) => {
         fetchItems,
         addItem,
         deleteItem,
+        toggleSubItem,
       }}
     >
       {children}
